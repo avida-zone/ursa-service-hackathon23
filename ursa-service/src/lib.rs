@@ -1,5 +1,6 @@
 pub mod models;
 pub mod schema;
+use log::info;
 use serde::{Deserialize, Serialize};
 
 // ursa
@@ -9,8 +10,8 @@ use ursa::cl::prover::Prover;
 use ursa::cl::verifier::Verifier;
 use ursa::cl::{
     new_nonce, CredentialKeyCorrectnessProof, CredentialPrivateKey, CredentialPublicKey,
-    CredentialSchema, NonCredentialSchema, RevocationKeyPublic, RevocationRegistry,
-    SubProofRequest,
+    CredentialSchema, CredentialSignature, CredentialValues, NonCredentialSchema, Proof,
+    RevocationKeyPublic, RevocationRegistry, SubProofRequest,
 };
 
 // ursa_demo
@@ -25,7 +26,7 @@ use diesel::prelude::*;
 use dotenvy::dotenv;
 
 // local
-use models::{Issuer, NewCredential, NewIssuer};
+use models::{Credential, Issuer, NewCredential, NewIssuer};
 
 // env
 use std::env;
@@ -49,13 +50,17 @@ pub fn establish_connection() -> PgConnection {
         .unwrap_or_else(|_| panic!("Error connecting to {database_url}"))
 }
 
-pub fn get_creds_dev(conn: &mut PgConnection, query_name: &str) -> Vec<String> {
-    use crate::schema::credentials::dsl::{contractaddr, credentials, credvalues};
+pub fn get_creds_dev(
+    conn: &mut PgConnection,
+    controller: &str,
+    cred_issuer: &str,
+) -> Option<Credential> {
+    use crate::schema::credentials::dsl::{contractaddr, credentials, issuer};
     credentials
-        .filter(contractaddr.eq(query_name))
-        .select(credvalues)
-        .load(conn)
-        .expect("error loading creds")
+        .filter(contractaddr.eq(controller))
+        .filter(issuer.eq(cred_issuer))
+        .first(conn)
+        .ok()
 }
 
 pub fn get_issuer(conn: &mut PgConnection, query_name: &str) -> Option<String> {
@@ -100,7 +105,7 @@ pub fn create_issuers_from_files(conn: &mut PgConnection, issuer: &str) -> Vec<I
 }
 
 // We mock the device environmen there
-// All of this should be done in the holders own dervice
+// This should be done in the holders own dervice
 pub fn rg_holder_issuer_set_up(conn: &mut PgConnection, controller_addr: String) {
     // These are static for the Avida framework
     let non_schema_attrs: Vec<&'static str> = vec!["link_secret"];
@@ -166,9 +171,10 @@ pub fn create_credentials(
     use crate::schema::issuers::dsl::{issuers, name};
     // we only create credentials once for this demo so we dont store these
     let link_secret = Prover::new_master_secret().unwrap();
-    issuers_list.to_vec().push(controller_addr);
-
-    for i in issuers_list.iter() {
+    // we also self issue credential
+    let mut list = issuers_list.to_vec();
+    list.push(controller_addr);
+    for i in list.iter() {
         let prover_credential_nonce = new_nonce().unwrap();
         let issuer_issuance_nonce = new_nonce().unwrap();
 
@@ -266,5 +272,58 @@ pub fn create_credentials(
             .values(&new_cred)
             .execute(conn)
             .expect("Error saving new credential");
+    }
+}
+
+// Generate the proofs from the stored credentials
+// This should be done in the holders own dervice
+pub fn generate_proof_from_db(
+    conn: &mut PgConnection,
+    controller_addr: String,
+    _wallet_addr: String,
+    nonce: String,
+    issuer_list: Vec<&str>,
+) -> Option<Proof> {
+    // this is from the rg-token-contract
+    let proof_request_nonce = BigNumber::from_dec(&nonce);
+    if proof_request_nonce.is_err() {
+        info!("proof request nonce cannot be parsed to BigNumber");
+        return None;
+    } else {
+        let nonce = proof_request_nonce.unwrap();
+        // Also add th wallet proof as ell
+        let mut proof_builder = Prover::new_proof_builder().unwrap();
+        proof_builder.add_common_attribute("link_secret").unwrap();
+        let mut list = issuer_list.to_vec();
+        list.push(&controller_addr);
+
+        for i in list {
+            let _cred = get_creds_dev(conn, &controller_addr, i);
+            let _issuer = get_issuer(conn, i);
+            if let (Some(p), Some(c)) = (&_issuer, &_cred) {
+                let params: SubProofReqParams = serde_json::from_str(&p).unwrap();
+                let cred_sig: CredentialSignature = serde_json::from_str(&c.credsig).unwrap();
+                let cred_values: CredentialValues = serde_json::from_str(&c.credvalues).unwrap();
+
+                proof_builder
+                    .add_sub_proof_request(
+                        &params.sub_proof_request,
+                        &params.credential_schema,
+                        &params.non_credential_schema,
+                        &cred_sig,
+                        &cred_values,
+                        &params.credential_pub_key,
+                        None,
+                        None,
+                    )
+                    .unwrap();
+            } else {
+                info!("cannot get issuer / cred: issuer {}", _issuer.is_some());
+                return None;
+            }
+        }
+
+        let proof = proof_builder.finalize(&nonce).unwrap();
+        Some(proof)
     }
 }

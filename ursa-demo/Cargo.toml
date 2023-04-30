@@ -9,4 +9,4 @@ log = "0.4.0"
 serde = { version = "1.0"}
 serde_json = { version = "1.0"}
 ursa = { git = "https://github.com/whalelephant/ursa", default-features = false, features = ["cl", "serde"], rev = "e77cc1bf90e"} 
-# ursa = { path = "../../ursa/libursa", default-features = false, features = ["cl", "serde"] } 
+# ursa = { path = "../../../ursa/libursa", default-features = false, features = ["cl", "serde"] } 

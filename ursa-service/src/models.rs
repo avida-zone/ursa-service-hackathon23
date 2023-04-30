@@ -1,5 +1,6 @@
 use crate::schema::{credentials, issuers};
 use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Queryable, Debug)]
 pub struct Issuer {
@@ -19,7 +20,7 @@ pub struct NewIssuer {
     pub subproofreqparams: String,
 }
 
-#[derive(Queryable, Debug)]
+#[derive(Queryable, Debug, Serialize, Deserialize)]
 pub struct Credential {
     pub id: i32,
     pub contractaddr: String,

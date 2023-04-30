@@ -1649,7 +1649,6 @@ checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 [[package]]
 name = "ursa"
 version = "0.3.7"
-source = "git+https://github.com/whalelephant/ursa?rev=e77cc1bf90e#e77cc1bf90ebb3fb1b957fee89cf485504aeaff4"
 dependencies = [
  "amcl",
  "failure",

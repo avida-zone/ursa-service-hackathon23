@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate rocket;
-
 use std::collections::BTreeMap;
 
 use rocket::fairing::{Fairing, Info, Kind};
@@ -9,10 +8,13 @@ use rocket::serde::json::Json;
 
 use rocket::{Request, Response};
 
+use ursa::cl::Proof;
 use ursa_service::{
-    create_credentials, create_issuers_from_files, establish_connection, get_creds_dev, get_issuer,
-    rg_holder_issuer_set_up,
+    create_credentials, create_issuers_from_files, establish_connection, generate_proof_from_db,
+    get_creds_dev, get_issuer, rg_holder_issuer_set_up,
 };
+
+use ursa_service::models::Credential;
 
 pub struct CORS;
 
@@ -49,10 +51,10 @@ fn get_subproofreqparams(issuer: Vec<&str>) -> Json<BTreeMap<&str, Option<String
 
 // DEV ONLY
 // Returns sub-proof-req-params from issuers
-#[get("/creds/<controller_addr>")]
-fn get_creds(controller_addr: String) -> Json<Vec<String>> {
+#[get("/creds/<controller_addr>/<issuer>")]
+fn get_creds(controller_addr: String, issuer: String) -> Json<Option<Credential>> {
     let mut connection = establish_connection();
-    let r = get_creds_dev(&mut connection, &controller_addr);
+    let r = get_creds_dev(&mut connection, &controller_addr, &issuer);
     Json(r)
 }
 
@@ -75,11 +77,21 @@ fn rg_holder_setup(controller_addr: String, wallet_addr: String) -> Json<String>
     Json(r)
 }
 
-// #[post("/generate-proof/<controller_addr>/<wallet_addr>/<nonce>/?<issuer>")]
-// fn generate_prrof(controller_addr: String, wallet_addr: String) -> Json<String> {}
+#[post("/generate-proof/<controller_addr>/<wallet_addr>/<nonce>?<issuer>")]
+fn generate_proof(
+    controller_addr: String,
+    wallet_addr: String,
+    nonce: String,
+    issuer: Vec<&str>,
+) -> Json<Option<Proof>> {
+    let mut connection = establish_connection();
+    let r = generate_proof_from_db(&mut connection, controller_addr, wallet_addr, nonce, issuer);
+    Json(r)
+}
 
 #[launch]
 fn rocket() -> _ {
+    env_logger::init();
     let mut connection = establish_connection();
     let setup_issuers = ["gayadeed", "infocert", "identrust"];
     for i in setup_issuers {
@@ -89,7 +101,12 @@ fn rocket() -> _ {
     rocket::build()
         .mount(
             "/",
-            routes![get_subproofreqparams, rg_holder_setup, get_creds],
+            routes![
+                get_subproofreqparams,
+                rg_holder_setup,
+                get_creds,
+                generate_proof
+            ],
         )
         .attach(CORS)
 }

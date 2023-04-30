@@ -1,0 +1,25 @@
+version: "3.7"
+services:
+  # ursa:
+  #   image: avida-base
+  #   restart: always
+  #   environment:
+  #     - DATABASE_URL=postgresql://avida:avidapass123@144.126.247.48:90/launchpad
+  #   ports:
+  #     - "8000:8000"
+  #   command:
+  #     - "cargo run"
+
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=avida
+      - POSTGRES_PASSWORD=avidapass123
+      - POSTGRES_DB=postgres
+    ports:
+      - "5243:5432"
+    volumes:
+      - creds:/var/lib/postgresql/data
+
+volumes:
+  creds:

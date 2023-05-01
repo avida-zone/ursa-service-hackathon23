@@ -39,12 +39,12 @@ impl Fairing for CORS {
 
 // Returns sub-proof-req-params from issuers
 #[get("/sub-proof-req-params?<issuer>")]
-fn get_subproofreqparams(issuer: Vec<&str>) -> Json<BTreeMap<&str, Option<String>>> {
+fn get_subproofreqparams(issuer: Vec<&str>) -> Json<Vec<Option<String>>> {
     let mut connection = establish_connection();
-    let mut v = BTreeMap::new();
+    let mut v = Vec::new();
     for i in issuer {
         let r = get_issuer(&mut connection, i);
-        v.insert(i, r);
+        v.push(r)
     }
     Json(v)
 }

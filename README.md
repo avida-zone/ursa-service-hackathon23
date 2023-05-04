@@ -46,3 +46,5 @@ where we create the proof to be used in the transactions.
 The `nonce` is specify for the `wallet_addr` on the rg-token-contract,
 which enables the [on-chain verifier] to verify tx that are unique.
 
+----
+Copyright 2023 NYMLAB Srl
